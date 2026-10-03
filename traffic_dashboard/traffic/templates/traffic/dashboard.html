@@ -1,0 +1,1465 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>
+        AP Traffic Intelligence Dashboard
+    </title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+    <link rel="stylesheet" href="{% static 'traffic/css/dashboard.css' %}?v=3">
+
+</head>
+
+
+<body>
+
+
+    <div class="dashboard-wrapper">
+
+
+        <aside class="sidebar">
+
+
+            <div class="sidebar-brand">
+
+                <div class="brand-icon">
+
+                    <i class="bi bi-traffic-cone"></i>
+
+                </div>
+
+
+                <div>
+
+                    <h5>
+                        AP Traffic
+                    </h5>
+
+                    <span>
+                        Intelligence
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <nav class="sidebar-nav">
+
+
+                <a href="#overview" class="nav-link active">
+
+                    <i class="bi bi-grid-1x2-fill"></i>
+
+                    <span>
+                        Overview
+                    </span>
+
+                </a>
+
+
+                <a href="#analytics" class="nav-link">
+
+                    <i class="bi bi-bar-chart-fill"></i>
+
+                    <span>
+                        Analytics
+                    </span>
+
+                </a>
+
+
+                <a href="#map-section" class="nav-link">
+
+                    <i class="bi bi-map-fill"></i>
+
+                    <span>
+                        Traffic Map
+                    </span>
+
+                </a>
+
+
+                <a href="#history-section" class="nav-link">
+
+                    <i class="bi bi-clock-history"></i>
+
+                    <span>
+                        History
+                    </span>
+
+                </a>
+
+            </nav>
+
+
+            <div class="sidebar-footer">
+
+                <div class="small text-muted">
+                    Traffic monitoring system
+                </div>
+
+                <div class="small text-muted">
+                    Andhra Pradesh
+                </div>
+
+            </div>
+
+        </aside>
+
+
+
+        <main class="main-content">
+
+
+            <header class="topbar">
+
+
+                <div class="topbar-left">
+
+
+                    <button
+                        class="btn btn-light d-lg-none"
+                        type="button"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#mobileSidebar"
+                    >
+
+                        <i class="bi bi-list"></i>
+
+                    </button>
+
+
+                    <div>
+
+                        <h4 class="page-title mb-0">
+                            AP Traffic Intelligence Dashboard
+                        </h4>
+
+                        <div class="text-muted small">
+                            Real-time traffic monitoring and analytics
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="topbar-right">
+
+
+                    <div class="live-indicator me-3">
+
+                        <span
+                            class="live-dot"
+                            id="liveDot"
+                        ></span>
+
+
+                        <span
+                            id="liveStatus"
+                            class="small fw-semibold"
+                        >
+                            Live
+                        </span>
+
+                    </div>
+
+
+                    <span
+                        id="countdown"
+                        class="small text-muted me-3"
+                    >
+                        Updating...
+                    </span>
+
+
+                    <button
+                        id="refreshButton"
+                        type="button"
+                        class="btn btn-primary"
+                    >
+
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+
+                        Refresh
+
+                    </button>
+
+                </div>
+
+            </header>
+
+
+
+            <section class="dashboard-section">
+
+
+                <div class="card dashboard-card">
+
+
+                    <div class="card-body">
+
+
+                        <div class="row g-3 align-items-end">
+
+
+                            <div class="col-lg-4 col-md-6">
+
+                                <label
+                                    for="cityFilter"
+                                    class="form-label fw-semibold"
+                                >
+                                    City
+                                </label>
+
+
+                                <select
+                                    id="cityFilter"
+                                    class="form-select"
+                                >
+
+                                    <option value="">
+                                        All Cities
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+
+
+                            <div class="col-lg-4 col-md-6">
+
+                                <label
+                                    for="areaFilter"
+                                    class="form-label fw-semibold"
+                                >
+                                    Area
+                                </label>
+
+
+                                <select
+                                    id="areaFilter"
+                                    class="form-select"
+                                >
+
+                                    <option value="">
+                                        All Areas
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+
+
+                            <div class="col-lg-4 col-md-12">
+
+                                <label
+                                    for="pointFilter"
+                                    class="form-label fw-semibold"
+                                >
+                                    Monitoring Point
+                                </label>
+
+
+                                <select
+                                    id="pointFilter"
+                                    class="form-select"
+                                >
+
+                                    <option value="">
+                                        All Monitoring Points
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <section
+                id="overview"
+                class="dashboard-section"
+            >
+
+
+                <div class="section-heading">
+
+
+                    <div>
+
+                        <h5 class="mb-1">
+                            Traffic Overview
+                        </h5>
+
+
+                        <p class="text-muted mb-0">
+                            Current traffic conditions across monitored locations.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="row g-4">
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+                        <div class="card stat-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="d-flex justify-content-between align-items-start">
+
+
+                                    <div>
+
+                                        <div class="stat-label">
+                                            Monitored Locations
+                                        </div>
+
+
+                                        <div
+                                            id="locationsCount"
+                                            class="stat-value"
+                                        >
+                                            0
+                                        </div>
+
+                                    </div>
+
+
+                                    <div class="stat-icon">
+
+                                        <i class="bi bi-geo-alt-fill"></i>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+                        <div class="card stat-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="d-flex justify-content-between align-items-start">
+
+
+                                    <div>
+
+                                        <div class="stat-label">
+                                            Low Traffic
+                                        </div>
+
+
+                                        <div
+                                            id="lowCount"
+                                            class="stat-value"
+                                        >
+                                            0
+                                        </div>
+
+                                    </div>
+
+
+                                    <div class="stat-icon">
+
+                                        <i class="bi bi-check-circle-fill"></i>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+                        <div class="card stat-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="d-flex justify-content-between align-items-start">
+
+
+                                    <div>
+
+                                        <div class="stat-label">
+                                            Medium Traffic
+                                        </div>
+
+
+                                        <div
+                                            id="mediumCount"
+                                            class="stat-value"
+                                        >
+                                            0
+                                        </div>
+
+                                    </div>
+
+
+                                    <div class="stat-icon">
+
+                                        <i class="bi bi-exclamation-circle-fill"></i>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+                        <div class="card stat-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="d-flex justify-content-between align-items-start">
+
+
+                                    <div>
+
+                                        <div class="stat-label">
+                                            High Traffic
+                                        </div>
+
+
+                                        <div
+                                            id="highCount"
+                                            class="stat-value"
+                                        >
+                                            0
+                                        </div>
+
+                                    </div>
+
+
+                                    <div class="stat-icon">
+
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="card dashboard-card mt-4">
+
+
+                    <div class="card-header bg-transparent border-0 pt-4 px-4">
+
+
+                        <div class="d-flex justify-content-between align-items-start">
+
+
+                            <div>
+
+                                <h6 class="mb-1 fw-bold">
+
+                                    <i class="bi bi-fire me-1"></i>
+
+                                    Live Traffic Hotspots
+
+                                </h6>
+
+
+                                <div class="small text-muted">
+
+                                    Highest traffic intensity across Andhra Pradesh
+
+                                </div>
+
+                            </div>
+
+
+                            <span class="traffic-badge traffic-high">
+
+                                TOP 5
+
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="card-body pt-2 px-4">
+
+
+                        <div id="hotspotsContainer">
+
+
+                            <div class="text-center text-secondary py-4">
+
+
+                                <div
+                                    class="spinner-border spinner-border-sm me-2"
+                                    role="status"
+                                ></div>
+
+
+                                Loading traffic hotspots...
+
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <section
+                id="incidents-section"
+                class="dashboard-section"
+            >
+
+
+                <div class="section-heading">
+
+
+                    <div>
+
+                        <h5 class="mb-1">
+
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+
+                            Active Traffic Incidents
+
+                        </h5>
+
+
+                        <p class="text-muted mb-0">
+
+                            Automatically detected traffic incidents across Andhra Pradesh.
+
+                        </p>
+
+                    </div>
+
+
+                    <div>
+
+                        <span
+                            id="incidentCountBadge"
+                            class="badge rounded-pill bg-secondary"
+                        >
+                            0 Active
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="card dashboard-card">
+
+
+                    <div class="card-body">
+
+
+                        <div id="incidentsContainer">
+
+
+                            <div class="text-center text-secondary py-4">
+
+
+                                <div
+                                    class="spinner-border spinner-border-sm me-2"
+                                    role="status"
+                                ></div>
+
+
+                                Loading active incidents...
+
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <section
+                id="analytics"
+                class="dashboard-section"
+            >
+
+
+                <div class="section-heading">
+
+
+                    <div>
+
+                        <h5 class="mb-1">
+                            Traffic Analytics
+                        </h5>
+
+
+                        <p class="text-muted mb-0">
+                            Performance indicators based on current traffic data.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="row g-4 mb-4">
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+                        <div class="card dashboard-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="text-muted small mb-2">
+                                    Average Speed
+                                </div>
+
+
+                                <div
+                                    id="averageSpeed"
+                                    class="h3 fw-bold mb-0"
+                                >
+                                    0 km/h
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+                        <div class="card dashboard-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="text-muted small mb-2">
+                                    Average Speed Reduction
+                                </div>
+
+
+                                <div
+                                    id="averageReduction"
+                                    class="h3 fw-bold mb-0"
+                                >
+                                    0%
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+                        <div class="card dashboard-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="text-muted small mb-2">
+                                    Average Confidence
+                                </div>
+
+
+                                <div
+                                    id="averageConfidence"
+                                    class="h3 fw-bold mb-0"
+                                >
+                                    0%
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="col-xl-3 col-md-6">
+
+
+                        <div class="card dashboard-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="text-muted small mb-2">
+                                    Highest Speed Reduction
+                                </div>
+
+
+                                <div
+                                    id="highestReduction"
+                                    class="h3 fw-bold mb-0"
+                                >
+                                    0%
+                                </div>
+
+
+                                <div
+                                    id="highestLocation"
+                                    class="small text-muted mt-1"
+                                >
+                                    —
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="row g-4">
+
+
+                    <div class="col-xl-7">
+
+
+                        <div class="card dashboard-card h-100">
+
+
+                            <div class="card-header bg-transparent border-0 pt-4 px-4">
+
+                                <h6 class="mb-1 fw-bold">
+                                    City Speed Analysis
+                                </h6>
+
+
+                                <div class="small text-muted">
+                                    Average current speed by city
+                                </div>
+
+                            </div>
+
+
+                            <div class="card-body">
+
+
+                                <div class="chart-container">
+
+                                    <canvas id="speedChart"></canvas>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="col-xl-5">
+
+
+                        <div class="card dashboard-card h-100">
+
+
+                            <div class="card-header bg-transparent border-0 pt-4 px-4">
+
+                                <h6 class="mb-1 fw-bold">
+                                    Traffic Distribution
+                                </h6>
+
+
+                                <div class="small text-muted">
+                                    Current traffic levels
+                                </div>
+
+                            </div>
+
+
+                            <div class="card-body">
+
+
+                                <div class="chart-container">
+
+                                    <canvas id="distributionChart"></canvas>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="card dashboard-card mt-4">
+
+
+                    <div class="card-header bg-transparent border-0 pt-4 px-4">
+
+                        <h6 class="mb-1 fw-bold">
+                            City Analytics
+                        </h6>
+
+
+                        <div class="small text-muted">
+                            Traffic performance across cities
+                        </div>
+
+                    </div>
+
+
+                    <div class="card-body">
+
+
+                        <div class="table-responsive">
+
+
+                            <table class="table align-middle mb-0">
+
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            City
+                                        </th>
+
+                                        <th>
+                                            Locations
+                                        </th>
+
+                                        <th>
+                                            Average Speed
+                                        </th>
+
+                                        <th>
+                                            Speed Reduction
+                                        </th>
+
+                                        <th>
+                                            Traffic Level
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody id="cityTable">
+
+
+                                    <tr>
+
+                                        <td
+                                            colspan="5"
+                                            class="text-center text-muted py-4"
+                                        >
+                                            Loading city analytics...
+                                        </td>
+
+                                    </tr>
+
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <section
+                id="map-section"
+                class="dashboard-section"
+            >
+
+
+                <div class="section-heading">
+
+
+                    <div>
+
+                        <h5 class="mb-1">
+                            Live Traffic Map
+                        </h5>
+
+
+                        <p class="text-muted mb-0">
+                            Real-time monitoring points across Andhra Pradesh.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="card dashboard-card">
+
+
+                    <div class="card-body p-3">
+
+
+                        <div
+                            id="trafficMap"
+                            role="application"
+                            aria-label="Andhra Pradesh traffic map"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <section class="dashboard-section">
+
+
+                <div class="section-heading">
+
+
+                    <div>
+
+                        <h5 class="mb-1">
+                            Monitoring Points
+                        </h5>
+
+
+                        <p class="text-muted mb-0">
+                            Detailed status of monitored traffic locations.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="card dashboard-card">
+
+
+                    <div class="card-body">
+
+
+                        <div class="table-responsive">
+
+
+                            <table class="table align-middle mb-0">
+
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Monitoring Point
+                                        </th>
+
+                                        <th>
+                                            Area
+                                        </th>
+
+                                        <th>
+                                            City
+                                        </th>
+
+                                        <th>
+                                            Current Speed
+                                        </th>
+
+                                        <th>
+                                            Free Flow
+                                        </th>
+
+                                        <th>
+                                            Reduction
+                                        </th>
+
+                                        <th>
+                                            Confidence
+                                        </th>
+
+                                        <th>
+                                            Traffic
+                                        </th>
+
+                                        <th>
+                                            Road Closure
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody id="areaTable">
+
+
+                                    <tr>
+
+                                        <td
+                                            colspan="9"
+                                            class="text-center text-muted py-4"
+                                        >
+                                            Loading monitoring points...
+                                        </td>
+
+                                    </tr>
+
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <section
+                id="history-section"
+                class="dashboard-section"
+            >
+
+
+                <div class="section-heading">
+
+
+                    <div>
+
+                        <h5 class="mb-1">
+                            Traffic History
+                        </h5>
+
+
+                        <p class="text-muted mb-0">
+                            Recent traffic observations.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="card dashboard-card">
+
+
+                    <div class="card-body">
+
+
+                        <div class="table-responsive">
+
+
+                            <table class="table align-middle mb-0">
+
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Time
+                                        </th>
+
+                                        <th>
+                                            Monitoring Point
+                                        </th>
+
+                                        <th>
+                                            Area
+                                        </th>
+
+                                        <th>
+                                            City
+                                        </th>
+
+                                        <th>
+                                            Speed
+                                        </th>
+
+                                        <th>
+                                            Reduction
+                                        </th>
+
+                                        <th>
+                                            Traffic Level
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody id="historyTable">
+
+
+                                    <tr>
+
+                                        <td
+                                            colspan="7"
+                                            class="text-center text-muted py-4"
+                                        >
+                                            Loading history...
+                                        </td>
+
+                                    </tr>
+
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <section class="dashboard-section">
+
+
+                <div class="row g-4">
+
+
+                    <div class="col-lg-6">
+
+
+                        <div class="card dashboard-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="d-flex align-items-center gap-3">
+
+
+                                    <div class="stat-icon">
+
+                                        <i class="bi bi-clock-fill"></i>
+
+                                    </div>
+
+
+                                    <div>
+
+
+                                        <div class="small text-muted">
+                                            Last Updated
+                                        </div>
+
+
+                                        <div
+                                            id="lastUpdated"
+                                            class="fw-semibold"
+                                        >
+                                            —
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="col-lg-6">
+
+
+                        <div class="card dashboard-card">
+
+
+                            <div class="card-body">
+
+
+                                <div class="d-flex align-items-start gap-3">
+
+
+                                    <div class="stat-icon">
+
+                                        <i class="bi bi-lightbulb-fill"></i>
+
+                                    </div>
+
+
+                                    <div>
+
+
+                                        <div class="small text-muted mb-1">
+                                            Traffic Insight
+                                        </div>
+
+
+                                        <div
+                                            id="trafficInsight"
+                                            class="fw-semibold"
+                                        >
+                                            Loading traffic insights...
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <footer class="dashboard-footer">
+
+
+                <div>
+                    AP Traffic Intelligence Dashboard
+                </div>
+
+
+                <div class="small text-muted">
+                    Traffic data powered by TomTom Traffic API
+                </div>
+
+            </footer>
+
+        </main>
+
+    </div>
+
+
+
+    <div
+        class="offcanvas offcanvas-start"
+        tabindex="-1"
+        id="mobileSidebar"
+        aria-labelledby="mobileSidebarLabel"
+    >
+
+
+        <div class="offcanvas-header">
+
+
+            <h5
+                class="offcanvas-title"
+                id="mobileSidebarLabel"
+            >
+                AP Traffic Intelligence
+            </h5>
+
+
+            <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="offcanvas"
+                aria-label="Close"
+            ></button>
+
+        </div>
+
+
+        <div class="offcanvas-body">
+
+
+            <nav class="nav flex-column gap-2">
+
+
+                <a
+                    href="#overview"
+                    class="nav-link"
+                    data-bs-dismiss="offcanvas"
+                >
+
+                    <i class="bi bi-grid-1x2-fill me-2"></i>
+
+                    Overview
+
+                </a>
+
+
+                <a
+                    href="#analytics"
+                    class="nav-link"
+                    data-bs-dismiss="offcanvas"
+                >
+
+                    <i class="bi bi-bar-chart-fill me-2"></i>
+
+                    Analytics
+
+                </a>
+
+
+                <a
+                    href="#map-section"
+                    class="nav-link"
+                    data-bs-dismiss="offcanvas"
+                >
+
+                    <i class="bi bi-map-fill me-2"></i>
+
+                    Traffic Map
+
+                </a>
+
+
+                <a
+                    href="#history-section"
+                    class="nav-link"
+                    data-bs-dismiss="offcanvas"
+                >
+
+                    <i class="bi bi-clock-history me-2"></i>
+
+                    History
+
+                </a>
+
+            </nav>
+
+        </div>
+
+    </div>
+
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="{% static 'traffic/js/dashboard.js' %}?v=6"></script>
+
+
+</body>
+
+</html>
