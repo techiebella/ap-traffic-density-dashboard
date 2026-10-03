@@ -1,8 +1,8 @@
 import os
-import sqlite3
 import subprocess
 import sys
 
+from django.db import connection as django_connection
 from django.http import JsonResponse
 from django.shortcuts import render
 
@@ -11,11 +11,12 @@ from django.shortcuts import render
 # CONFIGURATION
 # ============================================================
 
-BASE_DIR = r"D:\Traffic_Density_Project"
-
-DATABASE_PATH = os.path.join(
-    BASE_DIR,
-    "traffic_data.db"
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
 )
 
 MONITOR_SCRIPT = os.path.join(
@@ -25,21 +26,113 @@ MONITOR_SCRIPT = os.path.join(
 
 
 # ============================================================
-# DATABASE
+# DATABASE COMPATIBILITY
 # ============================================================
+
+class DatabaseCursorWrapper:
+    """
+    Compatibility wrapper for existing SQL queries.
+
+    Existing project queries use SQLite-style '?' placeholders.
+
+    Django SQLite:
+        ?
+
+    Django PostgreSQL:
+        %s
+
+    This wrapper automatically converts '?' to '%s'.
+    """
+
+    def __init__(self, cursor):
+        self.cursor = cursor
+
+    def execute(self, query, params=None):
+
+        query = query.replace("?", "%s")
+
+        if params is None:
+            return self.cursor.execute(query)
+
+        return self.cursor.execute(
+            query,
+            params
+        )
+
+    def fetchall(self):
+
+        rows = self.cursor.fetchall()
+
+        if not self.cursor.description:
+            return rows
+
+        columns = [
+            column[0]
+            for column in self.cursor.description
+        ]
+
+        return [
+            dict(zip(columns, row))
+            for row in rows
+        ]
+
+    def fetchone(self):
+
+        row = self.cursor.fetchone()
+
+        if row is None:
+            return None
+
+        if not self.cursor.description:
+            return row
+
+        columns = [
+            column[0]
+            for column in self.cursor.description
+        ]
+
+        return dict(zip(columns, row))
+
+    def close(self):
+        try:
+            self.cursor.close()
+        except Exception:
+            pass
+
+
+class DatabaseConnectionWrapper:
+    """
+    Uses Django's configured database.
+
+    Local:
+        SQLite traffic_data.db
+
+    Render:
+        PostgreSQL through DATABASE_URL
+    """
+
+    def cursor(self):
+
+        return DatabaseCursorWrapper(
+            django_connection.cursor()
+        )
+
+    def close(self):
+        """
+        Django manages the actual database connection.
+        """
+        pass
+
 
 def get_database_connection():
 
-    connection = sqlite3.connect(
-        DATABASE_PATH
-    )
-
-    connection.row_factory = sqlite3.Row
-
-    return connection
+    return DatabaseConnectionWrapper()
 
 
 def row_to_dict(row):
+
+    if isinstance(row, dict):
+        return row
 
     return dict(row)
 
@@ -55,20 +148,15 @@ def get_latest_records(
 ):
 
     connection = get_database_connection()
-
     cursor = connection.cursor()
 
-    conditions = []
-
-    parameters = []
-
-    conditions.append(
+    conditions = [
         "state = ?"
-    )
+    ]
 
-    parameters.append(
+    parameters = [
         "Andhra Pradesh"
-    )
+    ]
 
     if city:
 
@@ -124,7 +212,7 @@ def get_latest_records(
             FROM traffic_data
 
             WHERE {where_clause}
-        )
+        ) latest_data
 
         WHERE row_number = 1
 
@@ -134,19 +222,24 @@ def get_latest_records(
             area
     """
 
-    cursor.execute(
-        query,
-        parameters
-    )
+    try:
 
-    rows = cursor.fetchall()
+        cursor.execute(
+            query,
+            parameters
+        )
 
-    connection.close()
+        rows = cursor.fetchall()
 
-    return [
-        row_to_dict(row)
-        for row in rows
-    ]
+        return [
+            row_to_dict(row)
+            for row in rows
+        ]
+
+    finally:
+
+        cursor.close()
+        connection.close()
 
 
 # ============================================================
@@ -161,7 +254,6 @@ def get_history(
 ):
 
     connection = get_database_connection()
-
     cursor = connection.cursor()
 
     conditions = [
@@ -208,6 +300,7 @@ def get_history(
 
     query = f"""
         SELECT *
+
         FROM traffic_data
 
         WHERE {where_clause}
@@ -223,19 +316,24 @@ def get_history(
         int(limit)
     )
 
-    cursor.execute(
-        query,
-        parameters
-    )
+    try:
 
-    rows = cursor.fetchall()
+        cursor.execute(
+            query,
+            parameters
+        )
 
-    connection.close()
+        rows = cursor.fetchall()
 
-    return [
-        row_to_dict(row)
-        for row in rows
-    ]
+        return [
+            row_to_dict(row)
+            for row in rows
+        ]
+
+    finally:
+
+        cursor.close()
+        connection.close()
 
 
 # ============================================================
@@ -245,31 +343,33 @@ def get_history(
 def get_cities():
 
     connection = get_database_connection()
-
     cursor = connection.cursor()
 
-    cursor.execute("""
-        SELECT DISTINCT city
+    try:
 
-        FROM traffic_data
+        cursor.execute("""
+            SELECT DISTINCT city
 
-        WHERE state = 'Andhra Pradesh'
+            FROM traffic_data
 
-          AND city IS NOT NULL
+            WHERE state = 'Andhra Pradesh'
 
-          AND city != 'Unknown'
+              AND city IS NOT NULL
 
-        ORDER BY city
-    """)
+              AND city != 'Unknown'
 
-    cities = [
-        row["city"]
-        for row in cursor.fetchall()
-    ]
+            ORDER BY city
+        """)
 
-    connection.close()
+        return [
+            row["city"]
+            for row in cursor.fetchall()
+        ]
 
-    return cities
+    finally:
+
+        cursor.close()
+        connection.close()
 
 
 # ============================================================
@@ -279,51 +379,53 @@ def get_cities():
 def get_areas(city=None):
 
     connection = get_database_connection()
-
     cursor = connection.cursor()
 
-    if city:
+    try:
 
-        cursor.execute("""
-            SELECT DISTINCT area
+        if city:
 
-            FROM traffic_data
+            cursor.execute("""
+                SELECT DISTINCT area
 
-            WHERE state = 'Andhra Pradesh'
+                FROM traffic_data
 
-              AND city = ?
+                WHERE state = 'Andhra Pradesh'
 
-              AND area IS NOT NULL
+                  AND city = ?
 
-              AND area != 'Unknown'
+                  AND area IS NOT NULL
 
-            ORDER BY area
-        """, (city,))
+                  AND area != 'Unknown'
 
-    else:
+                ORDER BY area
+            """, (city,))
 
-        cursor.execute("""
-            SELECT DISTINCT area
+        else:
 
-            FROM traffic_data
+            cursor.execute("""
+                SELECT DISTINCT area
 
-            WHERE state = 'Andhra Pradesh'
+                FROM traffic_data
 
-              AND area IS NOT NULL
+                WHERE state = 'Andhra Pradesh'
 
-              AND area != 'Unknown'
+                  AND area IS NOT NULL
 
-            ORDER BY area
-        """)
+                  AND area != 'Unknown'
 
-    areas = [
-        row["area"]
-        for row in cursor.fetchall()
-    ]
+                ORDER BY area
+            """)
 
-    connection.close()
+        return [
+            row["area"]
+            for row in cursor.fetchall()
+        ]
 
-    return areas
+    finally:
+
+        cursor.close()
+        connection.close()
 
 
 # ============================================================
@@ -333,58 +435,60 @@ def get_areas(city=None):
 def get_points(city=None):
 
     connection = get_database_connection()
-
     cursor = connection.cursor()
 
-    if city:
+    try:
 
-        cursor.execute("""
-            SELECT DISTINCT
-                point_id,
-                area
+        if city:
 
-            FROM traffic_data
+            cursor.execute("""
+                SELECT DISTINCT
+                    point_id,
+                    area
 
-            WHERE state = 'Andhra Pradesh'
+                FROM traffic_data
 
-              AND city = ?
+                WHERE state = 'Andhra Pradesh'
 
-              AND point_id IS NOT NULL
+                  AND city = ?
 
-              AND point_id != 'Unknown'
+                  AND point_id IS NOT NULL
 
-            ORDER BY point_id
-        """, (city,))
+                  AND point_id != 'Unknown'
 
-    else:
+                ORDER BY point_id
+            """, (city,))
 
-        cursor.execute("""
-            SELECT DISTINCT
-                city,
-                point_id,
-                area
+        else:
 
-            FROM traffic_data
+            cursor.execute("""
+                SELECT DISTINCT
+                    city,
+                    point_id,
+                    area
 
-            WHERE state = 'Andhra Pradesh'
+                FROM traffic_data
 
-              AND point_id IS NOT NULL
+                WHERE state = 'Andhra Pradesh'
 
-              AND point_id != 'Unknown'
+                  AND point_id IS NOT NULL
 
-            ORDER BY
-                city,
-                point_id
-        """)
+                  AND point_id != 'Unknown'
 
-    points = [
-        dict(row)
-        for row in cursor.fetchall()
-    ]
+                ORDER BY
+                    city,
+                    point_id
+            """)
 
-    connection.close()
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+        ]
 
-    return points
+    finally:
+
+        cursor.close()
+        connection.close()
 
 
 # ============================================================
@@ -394,31 +498,23 @@ def get_points(city=None):
 def calculate_summary(records):
 
     low_count = 0
-
     medium_count = 0
-
     high_count = 0
-
     road_closures = 0
 
     total_speed = 0
-
     speed_count = 0
 
     total_reduction = 0
-
     reduction_count = 0
 
     total_confidence = 0
-
     confidence_count = 0
 
     total_score = 0
-
     score_count = 0
 
     total_delay = 0
-
     delay_count = 0
 
     for record in records:
@@ -498,47 +594,32 @@ def calculate_summary(records):
             delay_count += 1
 
     average_speed = (
-
         total_speed / speed_count
-
         if speed_count
-
         else 0
     )
 
     average_reduction = (
-
         total_reduction / reduction_count
-
         if reduction_count
-
         else 0
     )
 
     average_confidence = (
-
         total_confidence / confidence_count
-
         if confidence_count
-
         else 0
     )
 
     average_score = (
-
         total_score / score_count
-
         if score_count
-
         else 0
     )
 
     average_delay = (
-
         total_delay / delay_count
-
         if delay_count
-
         else 0
     )
 
@@ -599,24 +680,18 @@ def get_latest_timestamp(records):
 
     timestamps = [
 
-        record.get(
-            "timestamp"
-        )
+        record.get("timestamp")
 
         for record in records
 
-        if record.get(
-            "timestamp"
-        )
+        if record.get("timestamp")
     ]
 
     if not timestamps:
 
         return None
 
-    return max(
-        timestamps
-    )
+    return max(timestamps)
 
 
 # ============================================================
@@ -701,10 +776,7 @@ def run_traffic_monitor():
                     False,
 
                 "message":
-                    (
-                        "traffic_monitor.py "
-                        "not found."
-                    )
+                    "traffic_monitor.py not found."
             }
 
         result = subprocess.run(
@@ -747,10 +819,7 @@ def run_traffic_monitor():
                 False,
 
             "message":
-                (
-                    "Traffic monitor "
-                    "failed."
-                ),
+                "Traffic monitor failed.",
 
             "output":
                 result.stderr
@@ -764,10 +833,7 @@ def run_traffic_monitor():
                 False,
 
             "message":
-                (
-                    "Traffic monitoring "
-                    "timed out."
-                )
+                "Traffic monitoring timed out."
         }
 
     except Exception as error:
@@ -797,10 +863,7 @@ def refresh_traffic(request):
                     False,
 
                 "message":
-                    (
-                        "Only GET requests "
-                        "are allowed."
-                    )
+                    "Only GET requests are allowed."
             },
 
             status=405
@@ -904,15 +967,13 @@ def latest_traffic(request):
 
         point_id = None
 
-    latest_records = (
-        get_latest_records(
+    latest_records = get_latest_records(
 
-            city=city,
+        city=city,
 
-            area=area,
+        area=area,
 
-            point_id=point_id
-        )
+        point_id=point_id
     )
 
     history = get_history(
@@ -949,7 +1010,6 @@ def latest_traffic(request):
     return JsonResponse(
 
         {
-
             "success":
                 True,
 
@@ -1022,15 +1082,13 @@ def traffic_analytics(request):
 
         point_id = None
 
-    latest_records = (
-        get_latest_records(
+    latest_records = get_latest_records(
 
-            city=city,
+        city=city,
 
-            area=area,
+        area=area,
 
-            point_id=point_id
-        )
+        point_id=point_id
     )
 
     history = get_history(
@@ -1048,9 +1106,9 @@ def traffic_analytics(request):
         latest_records
     )
 
-    # --------------------------------------------------------
-    # Traffic Distribution
-    # --------------------------------------------------------
+    # ========================================================
+    # TRAFFIC DISTRIBUTION
+    # ========================================================
 
     distribution = {
 
@@ -1067,20 +1125,18 @@ def traffic_analytics(request):
     for record in latest_records:
 
         level = str(
-
             record.get(
                 "traffic_level"
             ) or ""
-
         ).upper()
 
         if level in distribution:
 
             distribution[level] += 1
 
-    # --------------------------------------------------------
-    # Highest Speed Reduction
-    # --------------------------------------------------------
+    # ========================================================
+    # HIGHEST SPEED REDUCTION
+    # ========================================================
 
     highest_reduction_location = None
 
@@ -1115,9 +1171,9 @@ def traffic_analytics(request):
                 f"{record.get('area', 'Unknown')}"
             )
 
-    # --------------------------------------------------------
-    # City Analytics
-    # --------------------------------------------------------
+    # ========================================================
+    # CITY ANALYTICS
+    # ========================================================
 
     city_data = {}
 
@@ -1125,9 +1181,7 @@ def traffic_analytics(request):
 
         city_name = (
 
-            record.get(
-                "city"
-            )
+            record.get("city")
 
             or "Unknown"
         )
@@ -1181,10 +1235,7 @@ def traffic_analytics(request):
         ) is not None:
 
             item["speed_total"] += float(
-
-                record[
-                    "current_speed"
-                ]
+                record["current_speed"]
             )
 
             item["speed_count"] += 1
@@ -1194,10 +1245,7 @@ def traffic_analytics(request):
         ) is not None:
 
             item["reduction_total"] += float(
-
-                record[
-                    "speed_reduction"
-                ]
+                record["speed_reduction"]
             )
 
             item["reduction_count"] += 1
@@ -1207,20 +1255,15 @@ def traffic_analytics(request):
         ) is not None:
 
             item["confidence_total"] += float(
-
-                record[
-                    "confidence"
-                ]
+                record["confidence"]
             )
 
             item["confidence_count"] += 1
 
         level = str(
-
             record.get(
                 "traffic_level"
             ) or ""
-
         ).upper()
 
         if level == "HIGH":
@@ -1248,73 +1291,37 @@ def traffic_analytics(request):
         city_result.append(
 
             {
-
                 "city":
                     city_name,
 
                 "locations":
-                    item[
-                        "locations"
-                    ],
+                    item["locations"],
 
                 "average_speed":
                     round(
-
-                        item[
-                            "speed_total"
-                        ]
-                        /
-                        item[
-                            "speed_count"
-                        ],
-
+                        item["speed_total"]
+                        / item["speed_count"],
                         2
-
                     )
-                    if item[
-                        "speed_count"
-                    ]
-
+                    if item["speed_count"]
                     else 0,
 
                 "average_reduction":
                     round(
-
-                        item[
-                            "reduction_total"
-                        ]
-                        /
-                        item[
-                            "reduction_count"
-                        ],
-
+                        item["reduction_total"]
+                        / item["reduction_count"],
                         2
-
                     )
-                    if item[
-                        "reduction_count"
-                    ]
-
+                    if item["reduction_count"]
                     else 0,
 
                 "average_confidence":
                     round(
-
-                        item[
-                            "confidence_total"
-                        ]
-                        /
-                        item[
-                            "confidence_count"
-                        ],
-
+                        item["confidence_total"]
+                        / item["confidence_count"],
                         2
-
                     )
-                    if item[
-                        "confidence_count"
-                    ]
-
+                    if item["confidence_count"]
                     else 0,
 
                 "high":
@@ -1336,9 +1343,9 @@ def traffic_analytics(request):
             item["city"]
     )
 
-    # --------------------------------------------------------
-    # Area Analytics
-    # --------------------------------------------------------
+    # ========================================================
+    # AREA ANALYTICS
+    # ========================================================
 
     area_result = []
 
@@ -1347,51 +1354,32 @@ def traffic_analytics(request):
         area_result.append(
 
             {
-
                 "state":
-                    record.get(
-                        "state"
-                    ),
+                    record.get("state"),
 
                 "city":
-                    record.get(
-                        "city"
-                    ),
+                    record.get("city"),
 
                 "point_id":
-                    record.get(
-                        "point_id"
-                    ),
+                    record.get("point_id"),
 
                 "area":
-                    record.get(
-                        "area"
-                    ),
+                    record.get("area"),
 
                 "latitude":
-                    record.get(
-                        "latitude"
-                    ),
+                    record.get("latitude"),
 
                 "longitude":
-                    record.get(
-                        "longitude"
-                    ),
+                    record.get("longitude"),
 
                 "current_speed":
-                    record.get(
-                        "current_speed"
-                    ),
+                    record.get("current_speed"),
 
                 "free_flow_speed":
-                    record.get(
-                        "free_flow_speed"
-                    ),
+                    record.get("free_flow_speed"),
 
                 "speed_reduction":
-                    record.get(
-                        "speed_reduction"
-                    ),
+                    record.get("speed_reduction"),
 
                 "current_travel_time":
                     record.get(
@@ -1404,29 +1392,19 @@ def traffic_analytics(request):
                     ),
 
                 "confidence":
-                    record.get(
-                        "confidence"
-                    ),
+                    record.get("confidence"),
 
                 "traffic_level":
-                    record.get(
-                        "traffic_level"
-                    ),
+                    record.get("traffic_level"),
 
                 "traffic_score":
-                    record.get(
-                        "traffic_score"
-                    ),
+                    record.get("traffic_score"),
 
                 "traffic_status":
-                    record.get(
-                        "traffic_status"
-                    ),
+                    record.get("traffic_status"),
 
                 "delay_minutes":
-                    record.get(
-                        "delay_minutes"
-                    ),
+                    record.get("delay_minutes"),
 
                 "road_closure":
                     bool(
@@ -1436,45 +1414,32 @@ def traffic_analytics(request):
                     ),
 
                 "timestamp":
-                    record.get(
-                        "timestamp"
-                    )
+                    record.get("timestamp")
             }
         )
 
-    # --------------------------------------------------------
-    # Trend Data
-    # --------------------------------------------------------
+    # ========================================================
+    # TREND DATA
+    # ========================================================
 
     trend = []
 
-    for record in reversed(
-        history
-    ):
+    for record in reversed(history):
 
         trend.append(
 
             {
-
                 "timestamp":
-                    record.get(
-                        "timestamp"
-                    ),
+                    record.get("timestamp"),
 
                 "city":
-                    record.get(
-                        "city"
-                    ),
+                    record.get("city"),
 
                 "point_id":
-                    record.get(
-                        "point_id"
-                    ),
+                    record.get("point_id"),
 
                 "area":
-                    record.get(
-                        "area"
-                    ),
+                    record.get("area"),
 
                 "current_speed":
                     record.get(
@@ -1516,7 +1481,6 @@ def traffic_analytics(request):
     return JsonResponse(
 
         {
-
             "success":
                 True,
 
@@ -1593,31 +1557,21 @@ def traffic_analytics(request):
 
 
 # ============================================================
-# AUTOMATIC TRAFFIC HOTSPOTS
+# TRAFFIC HOTSPOTS
 # ============================================================
 
-def get_traffic_hotspots(
-    limit=5
-):
+def get_traffic_hotspots(limit=5):
 
-    connection = (
-        get_database_connection()
-    )
-
+    connection = get_database_connection()
     cursor = connection.cursor()
 
     query = """
-
         SELECT *
-
         FROM (
-
             SELECT
-
                 traffic_data.*,
 
                 ROW_NUMBER() OVER (
-
                     PARTITION BY
                         city,
                         point_id,
@@ -1626,92 +1580,73 @@ def get_traffic_hotspots(
                     ORDER BY
                         timestamp DESC,
                         id DESC
-
                 ) AS row_number
 
             FROM traffic_data
 
             WHERE state = ?
-
-        )
+        ) latest_data
 
         WHERE row_number = 1
 
         ORDER BY
-
             traffic_score DESC,
-
             speed_reduction DESC
 
         LIMIT ?
-
     """
 
-    cursor.execute(
+    try:
 
-        query,
-
-        (
-            "Andhra Pradesh",
-            int(limit)
+        cursor.execute(
+            query,
+            (
+                "Andhra Pradesh",
+                int(limit)
+            )
         )
-    )
 
-    rows = cursor.fetchall()
+        rows = cursor.fetchall()
 
-    connection.close()
+    finally:
+
+        cursor.close()
+        connection.close()
 
     hotspots = []
 
     for row in rows:
 
-        record = row_to_dict(
-            row
-        )
+        record = row_to_dict(row)
 
         hotspots.append(
 
             {
-
                 "state":
-                    record.get(
-                        "state"
-                    ),
+                    record.get("state"),
 
                 "city":
-                    record.get(
-                        "city"
-                    ),
+                    record.get("city"),
 
                 "point_id":
-                    record.get(
-                        "point_id"
-                    ),
+                    record.get("point_id"),
 
                 "area":
-                    record.get(
-                        "area"
-                    ),
+                    record.get("area"),
 
                 "latitude":
-                    record.get(
-                        "latitude"
-                    ),
+                    record.get("latitude"),
 
                 "longitude":
-                    record.get(
-                        "longitude"
-                    ),
+                    record.get("longitude"),
 
                 "traffic_score":
                     round(
-
                         float(
                             record.get(
                                 "traffic_score"
                             ) or 0
                         ),
-
                         2
                     ),
 
@@ -1720,19 +1655,16 @@ def get_traffic_hotspots(
                         record.get(
                             "traffic_status"
                         )
-
                         or "NORMAL"
                     ),
 
                 "delay_minutes":
                     round(
-
                         float(
                             record.get(
                                 "delay_minutes"
                             ) or 0
                         ),
-
                         2
                     ),
 
@@ -1773,7 +1705,6 @@ def traffic_hotspots(request):
     try:
 
         limit = int(
-
             request.GET.get(
                 "limit",
                 5
@@ -1795,16 +1726,13 @@ def traffic_hotspots(request):
         )
     )
 
-    hotspots = (
-        get_traffic_hotspots(
-            limit=limit
-        )
+    hotspots = get_traffic_hotspots(
+        limit=limit
     )
 
     return JsonResponse(
 
         {
-
             "success":
                 True,
 
@@ -1826,30 +1754,16 @@ def traffic_hotspots(request):
 
 def get_traffic_incidents():
 
-    """
-    Automatically detects active traffic incidents
-    using only the latest reading from each
-    monitoring point in Andhra Pradesh.
-    """
-
-    connection = (
-        get_database_connection()
-    )
-
+    connection = get_database_connection()
     cursor = connection.cursor()
 
     query = """
-
         SELECT *
-
         FROM (
-
             SELECT
-
                 traffic_data.*,
 
                 ROW_NUMBER() OVER (
-
                     PARTITION BY
                         city,
                         point_id,
@@ -1858,87 +1772,67 @@ def get_traffic_incidents():
                     ORDER BY
                         timestamp DESC,
                         id DESC
-
                 ) AS row_number
 
             FROM traffic_data
 
             WHERE state = ?
-
-        )
+        ) latest_data
 
         WHERE row_number = 1
-
     """
 
-    cursor.execute(
+    try:
 
-        query,
-
-        (
-            "Andhra Pradesh",
+        cursor.execute(
+            query,
+            (
+                "Andhra Pradesh",
+            )
         )
-    )
 
-    rows = cursor.fetchall()
+        rows = cursor.fetchall()
 
-    connection.close()
+    finally:
+
+        cursor.close()
+        connection.close()
 
     incidents = []
 
     for row in rows:
 
-        record = row_to_dict(
-            row
-        )
+        record = row_to_dict(row)
 
         city = (
-
-            record.get(
-                "city"
-            )
-
+            record.get("city")
             or "Unknown City"
         )
 
         area = (
-
-            record.get(
-                "area"
-            )
-
-            or record.get(
-                "point_id"
-            )
-
+            record.get("area")
+            or record.get("point_id")
             or "Unknown Location"
         )
 
         point_id = (
-
-            record.get(
-                "point_id"
-            )
-
+            record.get("point_id")
             or "Unknown Point"
         )
 
         score = float(
-
             record.get(
                 "traffic_score"
             ) or 0
         )
 
         delay = float(
-
             record.get(
                 "delay_minutes"
             ) or 0
         )
 
         speed_reduction = float(
-
             record.get(
                 "speed_reduction"
             ) or 0
@@ -1951,10 +1845,10 @@ def get_traffic_incidents():
             )
 
             or "NORMAL"
+
         ).upper()
 
         road_closure = bool(
-
             record.get(
                 "road_closure"
             )
@@ -1962,16 +1856,15 @@ def get_traffic_incidents():
 
         detected_incidents = []
 
-        # ----------------------------------------------------
+        # ====================================================
         # ROAD CLOSURE
-        # ----------------------------------------------------
+        # ====================================================
 
         if road_closure:
 
             detected_incidents.append(
 
                 {
-
                     "incident_type":
                         "ROAD CLOSURE",
 
@@ -1986,16 +1879,15 @@ def get_traffic_incidents():
                 }
             )
 
-        # ----------------------------------------------------
+        # ====================================================
         # CRITICAL TRAFFIC
-        # ----------------------------------------------------
+        # ====================================================
 
         elif score >= 75:
 
             detected_incidents.append(
 
                 {
-
                     "incident_type":
                         "CRITICAL TRAFFIC",
 
@@ -2010,16 +1902,15 @@ def get_traffic_incidents():
                 }
             )
 
-        # ----------------------------------------------------
+        # ====================================================
         # HEAVY TRAFFIC
-        # ----------------------------------------------------
+        # ====================================================
 
         elif score >= 50:
 
             detected_incidents.append(
 
                 {
-
                     "incident_type":
                         "HEAVY TRAFFIC",
 
@@ -2034,16 +1925,15 @@ def get_traffic_incidents():
                 }
             )
 
-        # ----------------------------------------------------
+        # ====================================================
         # SEVERE SPEED REDUCTION
-        # ----------------------------------------------------
+        # ====================================================
 
         if speed_reduction >= 50:
 
             detected_incidents.append(
 
                 {
-
                     "incident_type":
                         "SEVERE SPEED REDUCTION",
 
@@ -2059,16 +1949,15 @@ def get_traffic_incidents():
                 }
             )
 
-        # ----------------------------------------------------
+        # ====================================================
         # HIGH DELAY
-        # ----------------------------------------------------
+        # ====================================================
 
         if delay >= 10:
 
             detected_incidents.append(
 
                 {
-
                     "incident_type":
                         "HIGH DELAY",
 
@@ -2084,17 +1973,15 @@ def get_traffic_incidents():
                 }
             )
 
-        # ----------------------------------------------------
+        # ====================================================
         # COMMON INCIDENT INFORMATION
-        # ----------------------------------------------------
+        # ====================================================
 
         for incident in detected_incidents:
 
             incident["state"] = (
 
-                record.get(
-                    "state"
-                )
+                record.get("state")
 
                 or "Andhra Pradesh"
             )
@@ -2162,9 +2049,9 @@ def get_traffic_incidents():
                 incident
             )
 
-    # --------------------------------------------------------
+    # ========================================================
     # INCIDENT SEVERITY ORDER
-    # --------------------------------------------------------
+    # ========================================================
 
     severity_order = {
 
@@ -2186,23 +2073,19 @@ def get_traffic_incidents():
         key=lambda item: (
 
             severity_order.get(
-
                 item.get(
                     "severity"
                 ),
-
                 99
             ),
 
             -float(
-
                 item.get(
                     "traffic_score"
                 ) or 0
             ),
 
             -float(
-
                 item.get(
                     "delay_minutes"
                 ) or 0
@@ -2226,7 +2109,6 @@ def traffic_incidents(request):
     return JsonResponse(
 
         {
-
             "success":
                 True,
 
